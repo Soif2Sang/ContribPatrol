@@ -1,15 +1,9 @@
 import { Probot } from "probot";
 import { createOrGetUser } from "./services/userService.js";
 import { registerRepositories } from "./services/repositoryService.js";
+import { parseCommand, handleCommand } from "./services/commandService.js";
 
 export default (app: Probot) => {
-  app.on("issues.opened", async (context) => {
-    console.log("Événement reçu ! Tentative de commentaire...");
-    const issueComment = context.issue({
-      body: "Thanks for opening this issue!",
-    });
-    await context.octokit.issues.createComment(issueComment);
-  });
   app.on("pull_request.opened", async (context) => {
     const user = context.payload.pull_request.user.login;
     console.log(`Nouvelle PR détectée de la part de : ${user}`);
@@ -17,14 +11,13 @@ export default (app: Probot) => {
 
   app.on("issue_comment.created", async (context) => {
     const commentBody = context.payload.comment.body;
-    const commenter = context.payload.comment.user.login;
-    const owner = context.payload.repository.owner.login;
 
+    // Check if comment mentions the bot
     if (commentBody.includes("@contribution-patrol")) {
-      if (commenter === owner) {
-        console.log("Commande validée : L'utilisateur est le Owner.");
-      } else {
-        console.log("Commande refusée : L'utilisateur n'est pas le Owner.");
+      const parsed = parseCommand(commentBody);
+      
+      if (parsed) {
+        await handleCommand(parsed.command, parsed.args, context);
       }
     }
   });

@@ -1,4 +1,4 @@
-import { db, trustedUsers, users, repositories } from '../db/index.js';
+import { db, trustedUsers, users } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
 
 /**

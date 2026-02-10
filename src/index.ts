@@ -4,6 +4,8 @@ import { registerRepositories, getRepository } from "./services/repositoryServic
 import { parseCommand, handleCommand } from "./services/commandService.js";
 import { isBanned } from "./services/banService.js";
 
+// THIS IS A SLOP COMMENT FOR TESTING PURPOSE
+
 export default (app: Probot) => {
   app.on("pull_request.opened", async (context) => {
     const user = context.payload.pull_request.user.login;

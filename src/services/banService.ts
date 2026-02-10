@@ -155,7 +155,7 @@ export async function isBanned(username: string, repoId: number): Promise<boolea
     .limit(1);
 
   if (!user) {
-    return false;
+    throw new Error(`User ${username} not found`);
   }
 
   const banned = await db

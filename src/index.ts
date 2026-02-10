@@ -12,45 +12,54 @@ export default (app: Probot) => {
     
     console.log(`Nouvelle PR détectée de la part de : ${user}`);
 
-    // Get repository from database
-    const repo = await getRepository(owner, repoName);
-    if (!repo) {
-      console.log(`Repository ${owner}/${repoName} not found in database`);
-      return;
-    }
+    try {
+      // Ensure user exists in database
+      await createOrGetUser(user);
 
-    // Check if user is banned
-    const userIsBanned = await isBanned(user, repo.id);
-    if (userIsBanned) {
-      console.log(`User ${user} is banned, closing PR`);
+      // Get repository from database
+      const repo = await getRepository(owner, repoName);
+      if (!repo) {
+        console.log(`Repository ${owner}/${repoName} not found in database`);
+        return;
+      }
+
+      // Check if user is banned
+      const userIsBanned = await isBanned(user, repo.id);
+      console.log(`User ${user} ban status for repo ${repo.id}: ${userIsBanned}`);
       
-      // Close the pull request
-      await context.octokit.pulls.update({
-        owner,
-        repo: repoName,
-        pull_number: context.payload.pull_request.number,
-        state: 'closed',
-      });
+      if (userIsBanned) {
+        console.log(`User ${user} is banned, closing PR #${context.payload.pull_request.number}`);
+        
+        // Close the pull request
+        await context.octokit.pulls.update({
+          owner,
+          repo: repoName,
+          pull_number: context.payload.pull_request.number,
+          state: 'closed',
+        });
 
-      // Add a comment explaining why
-      await context.octokit.issues.createComment({
-        owner,
-        repo: repoName,
-        issue_number: context.payload.pull_request.number,
-        body: `🚫 This pull request has been automatically closed because @${user} is currently banned from contributing to this repository.`,
-      });
-
-      // Add label
-      try {
-        await context.octokit.issues.addLabels({
+        // Add a comment explaining why
+        await context.octokit.issues.createComment({
           owner,
           repo: repoName,
           issue_number: context.payload.pull_request.number,
-          labels: ['spam'],
+          body: `🚫 This pull request has been automatically closed because @${user} is currently banned from contributing to this repository.`,
         });
-      } catch (error) {
-        console.log(`Could not add label (label may not exist): ${error}`);
+
+        // Add label
+        try {
+          await context.octokit.issues.addLabels({
+            owner,
+            repo: repoName,
+            issue_number: context.payload.pull_request.number,
+            labels: ['spam'],
+          });
+        } catch (error) {
+          console.log(`Could not add label (label may not exist): ${error}`);
+        }
       }
+    } catch (error) {
+      console.error(`Error processing pull_request.opened for ${user}:`, error);
     }
   });
 

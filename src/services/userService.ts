@@ -1,10 +1,13 @@
 import { db, users } from '../db/index.js';
 import { eq } from 'drizzle-orm';
+import { normalizeUsername } from '../utils.js';
 
 /**
  * Create a user if it doesn't exist, or return the existing user
  */
 export async function createOrGetUser(username: string) {
+  username = normalizeUsername(username);
+
   const existingUser = await db
     .select()
     .from(users)

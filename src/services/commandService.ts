@@ -35,6 +35,32 @@ function isMaintainer(username: string, owner: string): boolean {
 }
 
 /**
+ * Parse duration string (e.g., "12h", "3d", "1w") into days
+ */
+function parseDuration(durationStr: string): number | null {
+  const match = durationStr.match(/^(\d+)([hdwm])$/i);
+  if (!match) return null;
+
+  const value = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+
+  switch (unit) {
+    case 'h': // hours
+      return value / 24;
+    case 'd': // days
+      return value;
+    case 'w': // weeks
+      return value * 7;
+    case 'm': // months
+      return value * 30;
+    case 'y': // years
+      return value * 365;
+    default:
+      return null;
+  }
+}
+
+/**
  * Handle the ban command
  */
 async function handleBan(ctx: CommandContext, context: Context<'issue_comment.created'> | Context<'pull_request_review_comment.created'>) {
@@ -79,27 +105,27 @@ async function handleBan(ctx: CommandContext, context: Context<'issue_comment.cr
  * Handle the tempban command
  */
 async function handleTempBan(ctx: CommandContext, context: Context<'issue_comment.created'> | Context<'pull_request_review_comment.created'>) {
-  const [targetUserRaw, daysStr, ...reasonParts] = ctx.args;
+  const [targetUserRaw, durationStr, ...reasonParts] = ctx.args;
   const targetUser = normalizeUsername(targetUserRaw);
   const issueNumber = 'issue' in context.payload ? context.payload.issue.number : context.payload.pull_request.number;
   
-  if (!targetUser || !daysStr) {
+  if (!targetUser || !durationStr) {
     await context.octokit.issues.createComment({
       owner: ctx.owner,
       repo: ctx.repoName,
       issue_number: issueNumber,
-      body: `❌ Usage: \`@contribution-patrol tempban <username> <days> [reason]\``,
+      body: `❌ Usage: \`@contribution-patrol tempban <username> <duration> [reason]\`\n\nDuration examples: 12h (12 hours), 3d (3 days), 1w (1 week), 2m (2 months)`,
     });
     return;
   }
 
-  const days = parseInt(daysStr, 10);
-  if (isNaN(days) || days <= 0) {
+  const days = parseDuration(durationStr);
+  if (days === null || days <= 0) {
     await context.octokit.issues.createComment({
       owner: ctx.owner,
       repo: ctx.repoName,
       issue_number: issueNumber,
-      body: `❌ Days must be a positive number`,
+      body: `❌ Invalid duration format. Use: 12h (hours), 3d (days), 1w (weeks), or 2m (months)`,
     });
     return;
   }
@@ -116,7 +142,7 @@ async function handleTempBan(ctx: CommandContext, context: Context<'issue_commen
       owner: ctx.owner,
       repo: ctx.repoName,
       issue_number: issueNumber,
-      body: `✅ User @${targetUser} has been temporarily banned for ${days} day(s).${reason ? `\nReason: ${reason}` : ''}`,
+      body: `✅ User @${targetUser} has been temporarily banned for ${durationStr}.${reason ? `\nReason: ${reason}` : ''}`,
     });
   } catch (error) {
     await context.octokit.issues.createComment({
@@ -352,7 +378,7 @@ export async function handleCommand(
       owner,
       repo: repoName,
       issue_number: issueNumber,
-      body: `❌ Unknown command: \`${command}\`\n\nAvailable commands:\n- \`ban <username> [reason]\` - Permanently ban a user (maintainer/whitelist)\n- \`tempban <username> <days> [reason]\` - Temporarily ban a user (maintainer/whitelist)\n- \`unban <username>\` - Unban a user (maintainer/whitelist)\n- \`whitelist <username>\` - Add user to whitelist (maintainer only)\n- \`unwhitelist <username>\` - Remove user from whitelist (maintainer only)`,
+      body: `❌ Unknown command: \`${command}\`\n\nAvailable commands:\n- \`ban <username> [reason]\` - Permanently ban a user (maintainer/whitelist)\n- \`tempban <username> <duration> [reason]\` - Temporarily ban a user (maintainer/whitelist)\n  Duration: 12h (hours), 3d (days), 1w (weeks), 2m (months)\n- \`unban <username>\` - Unban a user (maintainer/whitelist)\n- \`whitelist <username>\` - Add user to whitelist (maintainer only)\n- \`unwhitelist <username>\` - Remove user from whitelist (maintainer only)`,
     });
   }
 }

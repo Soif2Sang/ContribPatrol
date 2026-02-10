@@ -1,12 +1,57 @@
 import { Probot } from "probot";
 import { createOrGetUser } from "./services/userService.js";
-import { registerRepositories } from "./services/repositoryService.js";
+import { registerRepositories, getRepository } from "./services/repositoryService.js";
 import { parseCommand, handleCommand } from "./services/commandService.js";
+import { isBanned } from "./services/banService.js";
 
 export default (app: Probot) => {
   app.on("pull_request.opened", async (context) => {
     const user = context.payload.pull_request.user.login;
+    const owner = context.payload.repository.owner.login;
+    const repoName = context.payload.repository.name;
+    
     console.log(`Nouvelle PR détectée de la part de : ${user}`);
+
+    // Get repository from database
+    const repo = await getRepository(owner, repoName);
+    if (!repo) {
+      console.log(`Repository ${owner}/${repoName} not found in database`);
+      return;
+    }
+
+    // Check if user is banned
+    const userIsBanned = await isBanned(user, repo.id);
+    if (userIsBanned) {
+      console.log(`User ${user} is banned, closing PR`);
+      
+      // Close the pull request
+      await context.octokit.pulls.update({
+        owner,
+        repo: repoName,
+        pull_number: context.payload.pull_request.number,
+        state: 'closed',
+      });
+
+      // Add a comment explaining why
+      await context.octokit.issues.createComment({
+        owner,
+        repo: repoName,
+        issue_number: context.payload.pull_request.number,
+        body: `🚫 This pull request has been automatically closed because @${user} is currently banned from contributing to this repository.`,
+      });
+
+      // Add label
+      try {
+        await context.octokit.issues.addLabels({
+          owner,
+          repo: repoName,
+          issue_number: context.payload.pull_request.number,
+          labels: ['spam'],
+        });
+      } catch (error) {
+        console.log(`Could not add label (label may not exist): ${error}`);
+      }
+    }
   });
 
   // Handle comments on pull request conversations
